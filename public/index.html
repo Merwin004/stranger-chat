@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>StrangerChat</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #0f0f1a;
+      color: #e0e0e0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    h1 {
+      font-size: 2rem;
+      margin-bottom: 6px;
+      color: #a78bfa;
+      letter-spacing: 1px;
+    }
+
+    .subtitle {
+      font-size: 0.85rem;
+      color: #888;
+      margin-bottom: 20px;
+    }
+
+    #chat-box {
+      width: 100%;
+      max-width: 540px;
+      background: #1a1a2e;
+      border-radius: 16px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    }
+
+    #status {
+      text-align: center;
+      font-size: 0.85rem;
+      padding: 8px;
+      border-radius: 8px;
+      background: #16213e;
+      color: #a78bfa;
+      font-weight: 500;
+    }
+
+    #messages {
+      height: 360px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 4px 2px;
+    }
+
+    #messages::-webkit-scrollbar { width: 4px; }
+    #messages::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+
+    .msg {
+      max-width: 75%;
+      padding: 10px 14px;
+      border-radius: 16px;
+      font-size: 0.92rem;
+      line-height: 1.4;
+      word-break: break-word;
+    }
+
+    .msg.you {
+      align-self: flex-end;
+      background: #7c3aed;
+      color: #fff;
+      border-bottom-right-radius: 4px;
+    }
+
+    .msg.stranger {
+      align-self: flex-start;
+      background: #2d2d44;
+      color: #e0e0e0;
+      border-bottom-left-radius: 4px;
+    }
+
+    .msg.system {
+      align-self: center;
+      background: transparent;
+      color: #666;
+      font-size: 0.78rem;
+      font-style: italic;
+    }
+
+    #input-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    #msg-input {
+      flex: 1;
+      padding: 10px 14px;
+      border-radius: 10px;
+      border: 1px solid #333;
+      background: #16213e;
+      color: #e0e0e0;
+      font-size: 0.92rem;
+      outline: none;
+    }
+
+    #msg-input:focus { border-color: #7c3aed; }
+
+    button {
+      padding: 10px 16px;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 0.88rem;
+      font-weight: 600;
+      transition: opacity 0.2s;
+    }
+
+    button:hover { opacity: 0.85; }
+
+    #send-btn {
+      background: #7c3aed;
+      color: #fff;
+    }
+
+    #next-btn {
+      background: #1e293b;
+      color: #a78bfa;
+      border: 1px solid #333;
+    }
+
+    #start-btn {
+      width: 100%;
+      padding: 12px;
+      background: #7c3aed;
+      color: #fff;
+      font-size: 1rem;
+    }
+  </style>
+</head>
+<body>
+  <h1>StrangerChat</h1>
+  <p class="subtitle">Talk to a random stranger anywhere in the world</p>
+
+  <div id="chat-box">
+    <div id="status">Press "Start" to find a stranger</div>
+    <div id="messages"></div>
+    <div id="input-row" style="display:none;">
+      <input id="msg-input" type="text" placeholder="Type a message..." maxlength="500" />
+      <button id="send-btn">Send</button>
+      <button id="next-btn">Next</button>
+    </div>
+    <button id="start-btn">Start Chatting</button>
+  </div>
+
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  <script>
+    // ← Replace this with your Railway server URL after deploying
+    const SERVER_URL = "http://localhost:3001";
+
+    const socket = io(SERVER_URL, { autoConnect: false });
+
+    const statusEl = document.getElementById("status");
+    const messagesEl = document.getElementById("messages");
+    const inputRow = document.getElementById("input-row");
+    const startBtn = document.getElementById("start-btn");
+    const sendBtn = document.getElementById("send-btn");
+    const nextBtn = document.getElementById("next-btn");
+    const msgInput = document.getElementById("msg-input");
+
+    let connected = false;
+
+    function addMessage(text, type) {
+      const div = document.createElement("div");
+      div.className = `msg ${type}`;
+      div.textContent = text;
+      messagesEl.appendChild(div);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function setStatus(text) {
+      statusEl.textContent = text;
+    }
+
+    function findPartner() {
+      messagesEl.innerHTML = "";
+      socket.emit("find_partner");
+      setStatus("Looking for a stranger...");
+      inputRow.style.display = "none";
+      connected = false;
+    }
+
+    startBtn.addEventListener("click", () => {
+      startBtn.style.display = "none";
+      socket.connect();
+    });
+
+    socket.on("connect", () => {
+      findPartner();
+    });
+
+    socket.on("waiting", () => {
+      setStatus("Waiting for a stranger...");
+    });
+
+    socket.on("paired", () => {
+      connected = true;
+      setStatus("Connected to a stranger! Say hi!");
+      inputRow.style.display = "flex";
+      addMessage("You are now chatting with a stranger.", "system");
+    });
+
+    socket.on("message", (data) => {
+      addMessage(data.text, "stranger");
+    });
+
+    socket.on("partner_left", () => {
+      connected = false;
+      setStatus("Stranger disconnected. Click Next to find another.");
+      addMessage("Stranger has disconnected.", "system");
+      inputRow.style.display = "flex";
+    });
+
+    sendBtn.addEventListener("click", sendMessage);
+    msgInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") sendMessage();
+    });
+
+    function sendMessage() {
+      const text = msgInput.value.trim();
+      if (!text || !connected) return;
+      socket.emit("message", { text });
+      addMessage(text, "you");
+      msgInput.value = "";
+    }
+
+    nextBtn.addEventListener("click", () => {
+      findPartner();
+    });
+  </script>
+</body>
+</html>
