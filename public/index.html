@@ -11,16 +11,17 @@
       font-family: 'Segoe UI', sans-serif;
       background: #0f0f1a;
       color: #e0e0e0;
-      height: 100vh;
+      min-height: 100vh;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
+      padding: 16px;
     }
 
     h1 {
       font-size: 2rem;
-      margin-bottom: 6px;
+      margin-bottom: 4px;
       color: #a78bfa;
       letter-spacing: 1px;
     }
@@ -43,6 +44,17 @@
       box-shadow: 0 8px 32px rgba(0,0,0,0.5);
     }
 
+    /* Score bar */
+    #score-bar {
+      display: none;
+      justify-content: center;
+      gap: 24px;
+      font-size: 0.82rem;
+      color: #888;
+    }
+
+    #score-bar span { color: #a78bfa; font-weight: 700; font-size: 1rem; }
+
     #status {
       text-align: center;
       font-size: 0.85rem;
@@ -54,7 +66,7 @@
     }
 
     #messages {
-      height: 360px;
+      height: 300px;
       overflow-y: auto;
       display: flex;
       flex-direction: column;
@@ -96,6 +108,66 @@
       font-style: italic;
     }
 
+    /* Game panel */
+    #game-panel {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      background: #16213e;
+      border-radius: 12px;
+      padding: 16px;
+      border: 1px solid #2d2d44;
+    }
+
+    #game-question {
+      font-size: 0.9rem;
+      color: #a78bfa;
+      font-weight: 600;
+      text-align: center;
+    }
+
+    .game-choices {
+      display: flex;
+      gap: 10px;
+      width: 100%;
+    }
+
+    .choice-btn {
+      flex: 1;
+      padding: 14px;
+      border: 2px solid #333;
+      border-radius: 12px;
+      background: #1a1a2e;
+      color: #e0e0e0;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
+    }
+
+    .choice-btn:hover { border-color: #7c3aed; color: #a78bfa; }
+    .choice-btn.selected { border-color: #7c3aed; background: #7c3aed22; color: #a78bfa; }
+    .choice-btn.winner { border-color: #22c55e; background: #22c55e22; color: #22c55e; }
+    .choice-btn.loser { border-color: #555; background: transparent; color: #555; }
+
+    #game-waiting {
+      font-size: 0.82rem;
+      color: #888;
+      font-style: italic;
+    }
+
+    #game-result {
+      text-align: center;
+      font-size: 1rem;
+      font-weight: 700;
+      display: none;
+    }
+
+    #game-result.match { color: #22c55e; }
+    #game-result.no-match { color: #f97316; }
+
     #input-row {
       display: flex;
       gap: 8px;
@@ -126,15 +198,19 @@
 
     button:hover { opacity: 0.85; }
 
-    #send-btn {
-      background: #7c3aed;
-      color: #fff;
-    }
+    #send-btn { background: #7c3aed; color: #fff; }
 
     #next-btn {
       background: #1e293b;
       color: #a78bfa;
       border: 1px solid #333;
+    }
+
+    #game-btn {
+      background: #1e293b;
+      color: #f97316;
+      border: 1px solid #f9731644;
+      white-space: nowrap;
     }
 
     #start-btn {
@@ -151,11 +227,27 @@
   <p class="subtitle">Talk to a random stranger anywhere in the world</p>
 
   <div id="chat-box">
+    <div id="score-bar">
+      🏆 Matches: <span id="score-match">0</span> &nbsp;|&nbsp; Rounds: <span id="score-rounds">0</span>
+    </div>
     <div id="status">Press "Start" to find a stranger</div>
     <div id="messages"></div>
+
+    <!-- This or That game panel -->
+    <div id="game-panel">
+      <div id="game-question">Loading question...</div>
+      <div class="game-choices">
+        <div class="choice-btn" id="choice-a" onclick="pickChoice('a')">A</div>
+        <div class="choice-btn" id="choice-b" onclick="pickChoice('b')">B</div>
+      </div>
+      <div id="game-waiting" style="display:none;">Waiting for stranger's answer...</div>
+      <div id="game-result"></div>
+    </div>
+
     <div id="input-row" style="display:none;">
       <input id="msg-input" type="text" placeholder="Type a message..." maxlength="500" />
       <button id="send-btn">Send</button>
+      <button id="game-btn" onclick="startGame()">🎮 This or That</button>
       <button id="next-btn">Next</button>
     </div>
     <button id="start-btn">Start Chatting</button>
@@ -163,7 +255,6 @@
 
   <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
   <script>
-    // ← Replace this with your Railway server URL after deploying
     const SERVER_URL = "https://stranger-chat-production-ac24.up.railway.app";
 
     const socket = io(SERVER_URL, { autoConnect: false });
@@ -172,11 +263,20 @@
     const messagesEl = document.getElementById("messages");
     const inputRow = document.getElementById("input-row");
     const startBtn = document.getElementById("start-btn");
-    const sendBtn = document.getElementById("send-btn");
-    const nextBtn = document.getElementById("next-btn");
     const msgInput = document.getElementById("msg-input");
+    const gamePanel = document.getElementById("game-panel");
+    const gameQuestion = document.getElementById("game-question");
+    const choiceA = document.getElementById("choice-a");
+    const choiceB = document.getElementById("choice-b");
+    const gameWaiting = document.getElementById("game-waiting");
+    const gameResult = document.getElementById("game-result");
+    const scoreBar = document.getElementById("score-bar");
 
     let connected = false;
+    let myPick = null;
+    let currentQuestion = null;
+    let scoreMatch = 0;
+    let scoreRounds = 0;
 
     function addMessage(text, type) {
       const div = document.createElement("div");
@@ -186,16 +286,44 @@
       messagesEl.scrollTop = messagesEl.scrollHeight;
     }
 
-    function setStatus(text) {
-      statusEl.textContent = text;
-    }
+    function setStatus(text) { statusEl.textContent = text; }
 
     function findPartner() {
       messagesEl.innerHTML = "";
+      hideGame();
       socket.emit("find_partner");
       setStatus("Looking for a stranger...");
       inputRow.style.display = "none";
       connected = false;
+    }
+
+    function hideGame() {
+      gamePanel.style.display = "none";
+      gameResult.style.display = "none";
+      gameResult.className = "game-result";
+      gameWaiting.style.display = "none";
+      myPick = null;
+      currentQuestion = null;
+      choiceA.className = "choice-btn";
+      choiceB.className = "choice-btn";
+    }
+
+    function startGame() {
+      if (!connected) return;
+      hideGame();
+      socket.emit("this_or_that_start");
+    }
+
+    function pickChoice(pick) {
+      if (myPick || !currentQuestion) return;
+      myPick = pick;
+      choiceA.className = "choice-btn" + (pick === "a" ? " selected" : "");
+      choiceB.className = "choice-btn" + (pick === "b" ? " selected" : "");
+      // disable buttons
+      choiceA.onclick = null;
+      choiceB.onclick = null;
+      gameWaiting.style.display = "block";
+      socket.emit("this_or_that_answer", { choice: pick });
     }
 
     startBtn.addEventListener("click", () => {
@@ -203,36 +331,74 @@
       socket.connect();
     });
 
-    socket.on("connect", () => {
-      findPartner();
-    });
-
-    socket.on("waiting", () => {
-      setStatus("Waiting for a stranger...");
-    });
+    socket.on("connect", findPartner);
+    socket.on("waiting", () => setStatus("Waiting for a stranger..."));
 
     socket.on("paired", () => {
       connected = true;
-      setStatus("Connected to a stranger! Say hi!");
+      setStatus("Connected to a stranger! Say hi or play a game 🎮");
       inputRow.style.display = "flex";
+      scoreBar.style.display = "flex";
       addMessage("You are now chatting with a stranger.", "system");
     });
 
-    socket.on("message", (data) => {
-      addMessage(data.text, "stranger");
-    });
+    socket.on("message", (data) => addMessage(data.text, "stranger"));
 
     socket.on("partner_left", () => {
       connected = false;
+      hideGame();
       setStatus("Stranger disconnected. Click Next to find another.");
       addMessage("Stranger has disconnected.", "system");
-      inputRow.style.display = "flex";
     });
 
-    sendBtn.addEventListener("click", sendMessage);
-    msgInput.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") sendMessage();
+    socket.on("this_or_that_question", (q) => {
+      currentQuestion = q;
+      myPick = null;
+      choiceA.textContent = q.a;
+      choiceB.textContent = q.b;
+      choiceA.className = "choice-btn";
+      choiceB.className = "choice-btn";
+      choiceA.onclick = () => pickChoice("a");
+      choiceB.onclick = () => pickChoice("b");
+      gameWaiting.style.display = "none";
+      gameResult.style.display = "none";
+      gameQuestion.textContent = `This or That?`;
+      gamePanel.style.display = "flex";
+      addMessage("🎮 This or That game started!", "system");
     });
+
+    socket.on("this_or_that_waiting", () => {
+      gameWaiting.style.display = "block";
+    });
+
+    socket.on("this_or_that_reveal", ({ yourChoice, strangerChoice, matched }) => {
+      const yourLabel = yourChoice === "a" ? currentQuestion.a : currentQuestion.b;
+      const strangerLabel = strangerChoice === "a" ? currentQuestion.a : currentQuestion.b;
+
+      // highlight buttons
+      choiceA.className = "choice-btn" + (yourChoice === "a" ? " winner" : " loser");
+      choiceB.className = "choice-btn" + (yourChoice === "b" ? " winner" : " loser");
+
+      gameWaiting.style.display = "none";
+      gameResult.style.display = "block";
+      scoreRounds++;
+      document.getElementById("score-rounds").textContent = scoreRounds;
+
+      if (matched) {
+        scoreMatch++;
+        document.getElementById("score-match").textContent = scoreMatch;
+        gameResult.className = "match";
+        gameResult.textContent = `🎉 You both picked "${yourLabel}" — you matched!`;
+        addMessage(`🎉 Both picked "${yourLabel}" — matched!`, "system");
+      } else {
+        gameResult.className = "no-match";
+        gameResult.textContent = `You: "${yourLabel}" · Stranger: "${strangerLabel}" — no match!`;
+        addMessage(`You: "${yourLabel}" · Stranger: "${strangerLabel}"`, "system");
+      }
+    });
+
+    document.getElementById("send-btn").addEventListener("click", sendMessage);
+    msgInput.addEventListener("keydown", (e) => { if (e.key === "Enter") sendMessage(); });
 
     function sendMessage() {
       const text = msgInput.value.trim();
@@ -242,7 +408,11 @@
       msgInput.value = "";
     }
 
-    nextBtn.addEventListener("click", () => {
+    document.getElementById("next-btn").addEventListener("click", () => {
+      scoreMatch = 0;
+      scoreRounds = 0;
+      document.getElementById("score-match").textContent = 0;
+      document.getElementById("score-rounds").textContent = 0;
       findPartner();
     });
   </script>
