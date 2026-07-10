@@ -7,81 +7,89 @@
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
+    /* ── Mobile-first base ── */
     body {
       font-family: 'Segoe UI', sans-serif;
       background: #0f0f1a;
       color: #e0e0e0;
-      min-height: 100vh;
+      width: 100%;
+      height: 100dvh;
       display: flex;
       flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 16px;
+      align-items: stretch;
+      overflow: hidden;
+    }
+
+    .app-header {
+      text-align: center;
+      padding: 14px 16px 8px;
+      flex-shrink: 0;
     }
 
     h1 {
-      font-size: 2rem;
-      margin-bottom: 4px;
+      font-size: 1.5rem;
       color: #a78bfa;
       letter-spacing: 1px;
     }
 
     .subtitle {
-      font-size: 0.85rem;
+      font-size: 0.75rem;
       color: #888;
-      margin-bottom: 20px;
+      margin-top: 2px;
     }
 
     #chat-box {
       width: 100%;
-      max-width: 540px;
+      flex: 1;
       background: #1a1a2e;
-      border-radius: 16px;
-      padding: 16px;
+      padding: 12px;
       display: flex;
       flex-direction: column;
-      gap: 12px;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      gap: 10px;
+      overflow: hidden;
     }
 
     /* Score bar */
     #score-bar {
       display: none;
       justify-content: center;
-      gap: 24px;
-      font-size: 0.82rem;
+      gap: 16px;
+      font-size: 0.8rem;
       color: #888;
+      flex-shrink: 0;
     }
 
-    #score-bar span { color: #a78bfa; font-weight: 700; font-size: 1rem; }
+    #score-bar span { color: #a78bfa; font-weight: 700; font-size: 0.95rem; }
 
     #status {
       text-align: center;
-      font-size: 0.85rem;
+      font-size: 0.82rem;
       padding: 8px;
       border-radius: 8px;
       background: #16213e;
       color: #a78bfa;
       font-weight: 500;
+      flex-shrink: 0;
     }
 
     #messages {
-      height: 300px;
+      flex: 1;
       overflow-y: auto;
       display: flex;
       flex-direction: column;
       gap: 8px;
       padding: 4px 2px;
+      -webkit-overflow-scrolling: touch;
     }
 
-    #messages::-webkit-scrollbar { width: 4px; }
+    #messages::-webkit-scrollbar { width: 3px; }
     #messages::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
 
     .msg {
-      max-width: 75%;
-      padding: 10px 14px;
+      max-width: 80%;
+      padding: 9px 13px;
       border-radius: 16px;
-      font-size: 0.92rem;
+      font-size: 0.9rem;
       line-height: 1.4;
       word-break: break-word;
     }
@@ -104,24 +112,25 @@
       align-self: center;
       background: transparent;
       color: #666;
-      font-size: 0.78rem;
+      font-size: 0.75rem;
       font-style: italic;
     }
 
-    /* Game panel */
+    /* ── Game panel ── */
     #game-panel {
       display: none;
       flex-direction: column;
       align-items: center;
-      gap: 12px;
+      gap: 10px;
       background: #16213e;
       border-radius: 12px;
-      padding: 16px;
+      padding: 14px;
       border: 1px solid #2d2d44;
+      flex-shrink: 0;
     }
 
     #game-question {
-      font-size: 0.9rem;
+      font-size: 0.88rem;
       color: #a78bfa;
       font-weight: 600;
       text-align: center;
@@ -129,38 +138,35 @@
 
     .game-choices {
       display: flex;
-      gap: 10px;
+      gap: 8px;
       width: 100%;
     }
 
     .choice-btn {
       flex: 1;
-      padding: 14px;
+      padding: 14px 8px;
       border: 2px solid #333;
       border-radius: 12px;
       background: #1a1a2e;
       color: #e0e0e0;
-      font-size: 0.95rem;
+      font-size: 0.9rem;
       font-weight: 600;
       cursor: pointer;
       transition: all 0.2s;
       text-align: center;
+      min-height: 48px;
     }
 
-    .choice-btn:hover { border-color: #7c3aed; color: #a78bfa; }
+    .choice-btn:active { opacity: 0.75; }
     .choice-btn.selected { border-color: #7c3aed; background: #7c3aed22; color: #a78bfa; }
     .choice-btn.winner { border-color: #22c55e; background: #22c55e22; color: #22c55e; }
     .choice-btn.loser { border-color: #555; background: transparent; color: #555; }
 
-    #game-waiting {
-      font-size: 0.82rem;
-      color: #888;
-      font-style: italic;
-    }
+    #game-waiting { font-size: 0.8rem; color: #888; font-style: italic; }
 
     #game-result {
       text-align: center;
-      font-size: 1rem;
+      font-size: 0.92rem;
       font-weight: 700;
       display: none;
     }
@@ -168,80 +174,29 @@
     #game-result.match { color: #22c55e; }
     #game-result.no-match { color: #f97316; }
 
-    #input-row {
-      display: flex;
-      gap: 8px;
-    }
-
-    #msg-input {
-      flex: 1;
-      padding: 10px 14px;
-      border-radius: 10px;
-      border: 1px solid #333;
-      background: #16213e;
-      color: #e0e0e0;
-      font-size: 0.92rem;
-      outline: none;
-    }
-
-    #msg-input:focus { border-color: #7c3aed; }
-
-    button {
-      padding: 10px 16px;
-      border: none;
-      border-radius: 10px;
-      cursor: pointer;
-      font-size: 0.88rem;
-      font-weight: 600;
-      transition: opacity 0.2s;
-    }
-
-    button:hover { opacity: 0.85; }
-
-    #send-btn { background: #7c3aed; color: #fff; }
-
-    #next-btn {
-      background: #1e293b;
-      color: #a78bfa;
-      border: 1px solid #333;
-    }
-
-    #game-btn {
-      background: #1e293b;
-      color: #f97316;
-      border: 1px solid #f9731644;
-      white-space: nowrap;
-    }
-
-    #story-btn {
-      background: #1e293b;
-      color: #34d399;
-      border: 1px solid #34d39944;
-      white-space: nowrap;
-    }
-
-    /* Story panel */
+    /* ── Story panel ── */
     #story-panel {
       display: none;
       flex-direction: column;
-      gap: 10px;
+      gap: 8px;
       background: #16213e;
       border-radius: 12px;
-      padding: 16px;
+      padding: 14px;
       border: 1px solid #2d2d44;
+      flex-shrink: 0;
     }
 
     #story-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      font-size: 0.85rem;
+      font-size: 0.83rem;
       color: #34d399;
       font-weight: 600;
     }
 
     #story-turn {
-      font-size: 0.78rem;
+      font-size: 0.75rem;
       padding: 3px 10px;
       border-radius: 20px;
       background: #0f0f1a;
@@ -251,13 +206,14 @@
     #story-turn.their-turn { color: #888; border: 1px solid #33333344; }
 
     #story-text {
-      min-height: 80px;
-      max-height: 150px;
+      min-height: 60px;
+      max-height: 120px;
       overflow-y: auto;
-      font-size: 0.9rem;
+      font-size: 0.88rem;
       line-height: 1.7;
       color: #e0e0e0;
       padding: 4px 2px;
+      -webkit-overflow-scrolling: touch;
     }
 
     #story-text::-webkit-scrollbar { width: 3px; }
@@ -273,13 +229,14 @@
 
     #story-input {
       flex: 1;
-      padding: 9px 12px;
+      padding: 10px 12px;
       border-radius: 10px;
       border: 1px solid #333;
       background: #0f0f1a;
       color: #e0e0e0;
-      font-size: 0.88rem;
+      font-size: 0.9rem;
       outline: none;
+      min-width: 0;
     }
 
     #story-input:focus { border-color: #34d399; }
@@ -288,24 +245,139 @@
     #story-send-btn {
       background: #34d399;
       color: #0f0f1a;
-      padding: 9px 14px;
+      padding: 10px 14px;
       font-size: 0.85rem;
+      flex-shrink: 0;
     }
 
     #story-send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
+    /* ── Input row ── */
+    #input-row {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .chat-input-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    .game-btn-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    #msg-input {
+      flex: 1;
+      min-width: 0;
+      padding: 11px 14px;
+      border-radius: 10px;
+      border: 1px solid #333;
+      background: #16213e;
+      color: #e0e0e0;
+      font-size: 0.92rem;
+      outline: none;
+    }
+
+    #msg-input:focus { border-color: #7c3aed; }
+
+    button {
+      padding: 11px 16px;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 600;
+      transition: opacity 0.2s;
+      min-height: 44px;
+      touch-action: manipulation;
+    }
+
+    button:active { opacity: 0.75; }
+
+    #send-btn { background: #7c3aed; color: #fff; flex-shrink: 0; }
+
+    #next-btn {
+      flex: 1;
+      background: #1e293b;
+      color: #a78bfa;
+      border: 1px solid #333;
+    }
+
+    #game-btn {
+      flex: 2;
+      background: #1e293b;
+      color: #f97316;
+      border: 1px solid #f9731644;
+    }
+
+    #story-btn {
+      flex: 2;
+      background: #1e293b;
+      color: #34d399;
+      border: 1px solid #34d39944;
+    }
+
     #start-btn {
       width: 100%;
-      padding: 12px;
+      padding: 13px;
       background: #7c3aed;
       color: #fff;
       font-size: 1rem;
+      flex-shrink: 0;
+    }
+
+    /* ── Desktop overrides ── */
+    @media (min-width: 600px) {
+      body {
+        height: auto;
+        min-height: 100vh;
+        justify-content: center;
+        padding: 20px 16px;
+        overflow: auto;
+      }
+
+      .app-header { padding: 0 0 16px; }
+
+      h1 { font-size: 2rem; }
+      .subtitle { font-size: 0.85rem; margin-top: 4px; }
+
+      #chat-box {
+        flex: unset;
+        max-width: 540px;
+        border-radius: 16px;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+        padding: 16px;
+        gap: 12px;
+      }
+
+      #messages {
+        flex: unset;
+        height: 300px;
+      }
+
+      #input-row {
+        flex-direction: row;
+        align-items: center;
+      }
+
+      .chat-input-row { flex: 1; }
+      .game-btn-row { flex-shrink: 0; }
+
+      #game-btn, #story-btn, #next-btn { flex: unset; }
+
+      .choice-btn:hover { border-color: #7c3aed; color: #a78bfa; }
     }
   </style>
 </head>
 <body>
-  <h1>StrangerChat</h1>
-  <p class="subtitle">Talk to a random stranger anywhere in the world</p>
+  <div class="app-header">
+    <h1>StrangerChat</h1>
+    <p class="subtitle">Talk to a random stranger anywhere in the world</p>
+  </div>
 
   <div id="chat-box">
     <div id="score-bar">
@@ -339,11 +411,15 @@
     </div>
 
     <div id="input-row" style="display:none;">
-      <input id="msg-input" type="text" placeholder="Type a message..." maxlength="500" />
-      <button id="send-btn">Send</button>
-      <button id="game-btn" onclick="startGame()">🎮 This or That</button>
-      <button id="story-btn" onclick="startStory()">📖 Story</button>
-      <button id="next-btn">Next</button>
+      <div class="chat-input-row">
+        <input id="msg-input" type="text" placeholder="Type a message..." maxlength="500" />
+        <button id="send-btn">Send</button>
+      </div>
+      <div class="game-btn-row">
+        <button id="game-btn" onclick="startGame()">🎮 This or That</button>
+        <button id="story-btn" onclick="startStory()">📖 Story</button>
+        <button id="next-btn">Next</button>
+      </div>
     </div>
     <button id="start-btn">Start Chatting</button>
   </div>
