@@ -240,6 +240,7 @@
     #next-btn  { flex: 1; background: #1e293b; color: #a78bfa; border: 1px solid #333; }
     #game-btn  { flex: 2; background: #1e293b; color: #f97316; border: 1px solid #f9731644; }
     #story-btn { flex: 2; background: #1e293b; color: #34d399; border: 1px solid #34d39944; }
+    #fps-btn   { flex: 2; background: #1e293b; color: #f43f5e; border: 1px solid #f43f5e44; }
 
     #start-btn {
       width: 100%;
@@ -248,6 +249,91 @@
       color: #fff;
       font-size: clamp(0.9rem, 2.5vw, 1rem);
       flex-shrink: 0;
+    }
+
+    /* ── FPS Duel Overlay ── */
+    #fps-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: #0a0a14;
+      z-index: 200;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: clamp(8px, 2vw, 14px);
+      padding: clamp(8px, 2vw, 16px);
+    }
+    #fps-top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      width: min(500px, 100%);
+    }
+    #fps-title-label {
+      font-size: clamp(0.85rem, 2.5vw, 1rem);
+      font-weight: 700;
+      color: #f97316;
+      letter-spacing: 1px;
+    }
+    #fps-quit-btn {
+      background: #1e293b;
+      color: #888;
+      border: 1px solid #333;
+      font-size: clamp(0.7rem, 1.8vw, 0.8rem);
+      padding: 6px 12px;
+      min-height: unset;
+    }
+    #fps-canvas {
+      width: min(500px, 100%);
+      aspect-ratio: 500 / 350;
+      border: 2px solid #2d2d44;
+      border-radius: 8px;
+      cursor: crosshair;
+      display: block;
+      touch-action: none;
+    }
+    #fps-hint {
+      font-size: clamp(0.62rem, 1.6vw, 0.72rem);
+      color: #555;
+      text-align: center;
+    }
+    /* Mobile D-pad */
+    #fps-mobile-controls {
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      width: min(500px, 100%);
+      gap: 16px;
+    }
+    @media (pointer: coarse) {
+      #fps-mobile-controls { display: flex; }
+      #fps-hint { display: none; }
+    }
+    .dpad { display: grid; grid-template-columns: 44px 44px 44px; grid-template-rows: 44px 44px 44px; gap: 3px; }
+    .dpad-btn {
+      background: #1e293b;
+      color: #a78bfa;
+      border: 1px solid #333;
+      border-radius: 8px;
+      font-size: 1rem;
+      min-height: unset;
+      padding: 0;
+      touch-action: manipulation;
+    }
+    .dpad-center { grid-column: 2; grid-row: 2; background: transparent; border: none; cursor: default; }
+    #fps-fire-btn {
+      background: #7c3aed;
+      color: #fff;
+      font-size: clamp(0.85rem, 3vw, 1rem);
+      padding: 14px 20px;
+      border-radius: 50%;
+      width: 72px;
+      height: 72px;
+      min-height: unset;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
 
     /* ── Wide screens: switch to centered card ── */
@@ -283,6 +369,30 @@
   <div class="app-header">
     <h1>StrangerChat</h1>
     <p class="subtitle">Talk to a random stranger anywhere in the world</p>
+  </div>
+
+  <!-- FPS Duel Overlay -->
+  <div id="fps-overlay">
+    <div id="fps-top-bar">
+      <span id="fps-title-label">🔫 FPS DUEL</span>
+      <button id="fps-quit-btn" onclick="FPS.stop()">✕ Quit</button>
+    </div>
+    <canvas id="fps-canvas" width="500" height="350"></canvas>
+    <p id="fps-hint">WASD / Arrows: Move &nbsp;·&nbsp; Mouse: Aim &nbsp;·&nbsp; Click / Space: Shoot</p>
+    <div id="fps-mobile-controls">
+      <div class="dpad">
+        <div></div>
+        <button class="dpad-btn" id="dpad-up">▲</button>
+        <div></div>
+        <button class="dpad-btn" id="dpad-left">◀</button>
+        <div class="dpad-center"></div>
+        <button class="dpad-btn" id="dpad-right">▶</button>
+        <div></div>
+        <button class="dpad-btn" id="dpad-down">▼</button>
+        <div></div>
+      </div>
+      <button id="fps-fire-btn" onclick="FPS.shoot()">🔫</button>
+    </div>
   </div>
 
   <div id="chat-box">
@@ -324,6 +434,7 @@
       <div class="game-btn-row">
         <button id="game-btn" onclick="startGame()">🎮 This or That</button>
         <button id="story-btn" onclick="startStory()">📖 Story</button>
+        <button id="fps-btn" onclick="startFPSDuel()">🔫 Duel</button>
         <button id="next-btn">Next</button>
       </div>
     </div>
@@ -493,6 +604,7 @@
       connected = false;
       hideGame();
       hideStory();
+      if (FPS.active) FPS.stop();
       setStatus("Stranger disconnected. Click Next to find another.");
       addMessage("Stranger has disconnected.", "system");
     });
@@ -553,6 +665,275 @@
       addMessage(text, "you");
       msgInput.value = "";
     }
+
+    // ======= FPS DUEL GAME =======
+    const FPS = {
+      W: 500, H: 350,
+      PR: 15,   // player radius
+      BR: 5,    // bullet radius
+      BSPEED: 360,
+      MSPEED: 155,
+      COOLDOWN: 650,
+      MAX_HP: 3,
+
+      active: false, gameOver: false, gameOverMsg: '',
+      animId: null, lastTime: 0, sendTimer: 0,
+      keys: {}, mouse: { x: 250, y: 175 },
+      lastShot: 0,
+      me: null, opp: null,
+      myBullets: [], oppBullets: [],
+
+      init(side) {
+        this.active = true; this.gameOver = false; this.gameOverMsg = '';
+        this.myBullets = []; this.oppBullets = [];
+        this.keys = {}; this.lastShot = 0; this.sendTimer = 0;
+        const lx = 80, rx = this.W - 80, cy = this.H / 2;
+        this.me  = { x: side === 'left' ? lx : rx, y: cy, angle: side === 'left' ? 0 : Math.PI, hp: this.MAX_HP };
+        this.opp = { x: side === 'left' ? rx : lx, y: cy, angle: side === 'left' ? Math.PI : 0, hp: this.MAX_HP };
+        this.bindEvents();
+        this.lastTime = performance.now();
+        const loop = (t) => { if (!this.active) return; this.animId = requestAnimationFrame(loop); this.tick(t); };
+        this.animId = requestAnimationFrame(loop);
+        document.getElementById('fps-overlay').style.display = 'flex';
+      },
+
+      bindEvents() {
+        const canvas = document.getElementById('fps-canvas');
+        this._kd = (e) => {
+          this.keys[e.key.toLowerCase()] = true;
+          if (e.code === 'Space') { e.preventDefault(); this.shoot(); }
+        };
+        this._ku = (e) => { this.keys[e.key.toLowerCase()] = false; };
+        this._mm = (e) => {
+          const r = canvas.getBoundingClientRect();
+          this.mouse.x = (e.clientX - r.left) * (this.W / r.width);
+          this.mouse.y = (e.clientY - r.top)  * (this.H / r.height);
+        };
+        this._md = (e) => { if (e.button === 0) this.shoot(); };
+        this._ts = (e) => {
+          e.preventDefault();
+          const r = canvas.getBoundingClientRect();
+          this.mouse.x = (e.touches[0].clientX - r.left) * (this.W / r.width);
+          this.mouse.y = (e.touches[0].clientY - r.top)  * (this.H / r.height);
+          this.shoot();
+        };
+        this._tm = (e) => {
+          e.preventDefault();
+          const r = canvas.getBoundingClientRect();
+          this.mouse.x = (e.touches[0].clientX - r.left) * (this.W / r.width);
+          this.mouse.y = (e.touches[0].clientY - r.top)  * (this.H / r.height);
+        };
+        window.addEventListener('keydown', this._kd);
+        window.addEventListener('keyup',   this._ku);
+        canvas.addEventListener('mousemove', this._mm);
+        canvas.addEventListener('mousedown', this._md);
+        canvas.addEventListener('touchstart', this._ts, { passive: false });
+        canvas.addEventListener('touchmove',  this._tm, { passive: false });
+
+        // D-pad buttons
+        const dmap = { 'dpad-up': 'w', 'dpad-down': 's', 'dpad-left': 'a', 'dpad-right': 'd' };
+        Object.entries(dmap).forEach(([id, key]) => {
+          const btn = document.getElementById(id);
+          if (!btn) return;
+          btn.addEventListener('touchstart', (e) => { e.preventDefault(); this.keys[key] = true; }, { passive: false });
+          btn.addEventListener('touchend',   (e) => { e.preventDefault(); this.keys[key] = false; }, { passive: false });
+          btn.addEventListener('mousedown',  () => this.keys[key] = true);
+          btn.addEventListener('mouseup',    () => this.keys[key] = false);
+        });
+      },
+
+      unbindEvents() {
+        const canvas = document.getElementById('fps-canvas');
+        window.removeEventListener('keydown', this._kd);
+        window.removeEventListener('keyup',   this._ku);
+        if (canvas) {
+          canvas.removeEventListener('mousemove', this._mm);
+          canvas.removeEventListener('mousedown', this._md);
+          canvas.removeEventListener('touchstart', this._ts);
+          canvas.removeEventListener('touchmove',  this._tm);
+        }
+      },
+
+      shoot() {
+        if (this.gameOver || !this.active) return;
+        const now = performance.now();
+        if (now - this.lastShot < this.COOLDOWN) return;
+        this.lastShot = now;
+        const angle = Math.atan2(this.mouse.y - this.me.y, this.mouse.x - this.me.x);
+        this.me.angle = angle;
+        const bx = this.me.x + Math.cos(angle) * (this.PR + this.BR + 2);
+        const by = this.me.y + Math.sin(angle) * (this.PR + this.BR + 2);
+        const vx = Math.cos(angle) * this.BSPEED;
+        const vy = Math.sin(angle) * this.BSPEED;
+        this.myBullets.push({ x: bx, y: by, vx, vy, life: 2.5 });
+        socket.emit('fps_shoot', { x: bx, y: by, vx, vy });
+      },
+
+      tick(timestamp) {
+        const dt = Math.min((timestamp - this.lastTime) / 1000, 0.05);
+        this.lastTime = timestamp;
+        if (!this.gameOver) this.update(dt);
+        this.render();
+      },
+
+      update(dt) {
+        let dx = 0, dy = 0;
+        if (this.keys['w'] || this.keys['arrowup'])    dy -= 1;
+        if (this.keys['s'] || this.keys['arrowdown'])  dy += 1;
+        if (this.keys['a'] || this.keys['arrowleft'])  dx -= 1;
+        if (this.keys['d'] || this.keys['arrowright']) dx += 1;
+        if (dx || dy) {
+          const len = Math.sqrt(dx*dx + dy*dy);
+          this.me.x = Math.max(this.PR, Math.min(this.W - this.PR, this.me.x + (dx/len) * this.MSPEED * dt));
+          this.me.y = Math.max(this.PR, Math.min(this.H - this.PR, this.me.y + (dy/len) * this.MSPEED * dt));
+        }
+        this.me.angle = Math.atan2(this.mouse.y - this.me.y, this.mouse.x - this.me.x);
+
+        // Update my bullets
+        this.myBullets = this.myBullets.filter(b => {
+          b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt;
+          return b.life > 0 && b.x > 0 && b.x < this.W && b.y > 0 && b.y < this.H;
+        });
+
+        // Update opponent bullets — check if they hit me
+        this.oppBullets = this.oppBullets.filter(b => {
+          b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt;
+          if (b.life <= 0 || b.x < 0 || b.x > this.W || b.y < 0 || b.y > this.H) return false;
+          const dist = Math.hypot(b.x - this.me.x, b.y - this.me.y);
+          if (dist < this.PR + this.BR) { socket.emit('fps_hit'); return false; }
+          return true;
+        });
+
+        // Send position ~20fps
+        this.sendTimer += dt;
+        if (this.sendTimer >= 0.05) {
+          this.sendTimer = 0;
+          socket.emit('fps_move', { x: this.me.x, y: this.me.y, angle: this.me.angle });
+        }
+      },
+
+      render() {
+        const ctx = document.getElementById('fps-canvas').getContext('2d');
+        const W = this.W, H = this.H, PR = this.PR, BR = this.BR;
+
+        // Background
+        ctx.fillStyle = '#0a0a14'; ctx.fillRect(0, 0, W, H);
+
+        // Grid
+        ctx.strokeStyle = '#ffffff06'; ctx.lineWidth = 1;
+        for (let x = 50; x < W; x += 50) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
+        for (let y = 50; y < H; y += 50) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+
+        // Arena border
+        ctx.strokeStyle = '#2d2d44'; ctx.lineWidth = 2;
+        ctx.strokeRect(1, 1, W-2, H-2);
+
+        // My bullets (purple)
+        ctx.fillStyle = '#c4b5fd';
+        this.myBullets.forEach(b => { ctx.beginPath(); ctx.arc(b.x, b.y, BR, 0, Math.PI*2); ctx.fill(); });
+
+        // Opponent bullets (orange)
+        ctx.fillStyle = '#fb923c';
+        this.oppBullets.forEach(b => { ctx.beginPath(); ctx.arc(b.x, b.y, BR, 0, Math.PI*2); ctx.fill(); });
+
+        // Draw player fn
+        const drawPlayer = (p, color, glowColor, label) => {
+          // Glow
+          const grad = ctx.createRadialGradient(p.x, p.y, PR*0.3, p.x, p.y, PR*1.6);
+          grad.addColorStop(0, glowColor + '55');
+          grad.addColorStop(1, glowColor + '00');
+          ctx.fillStyle = grad;
+          ctx.beginPath(); ctx.arc(p.x, p.y, PR*1.6, 0, Math.PI*2); ctx.fill();
+
+          ctx.fillStyle = color;
+          ctx.beginPath(); ctx.arc(p.x, p.y, PR, 0, Math.PI*2); ctx.fill();
+
+          // Aim line
+          ctx.strokeStyle = '#ffffff99'; ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(p.x + Math.cos(p.angle)*PR, p.y + Math.sin(p.angle)*PR);
+          ctx.lineTo(p.x + Math.cos(p.angle)*(PR+12), p.y + Math.sin(p.angle)*(PR+12));
+          ctx.stroke();
+
+          // Label
+          ctx.fillStyle = '#ffffffaa'; ctx.font = 'bold 10px Segoe UI'; ctx.textAlign = 'center';
+          ctx.fillText(label, p.x, p.y - PR - 4);
+        };
+
+        drawPlayer(this.opp, '#ea580c', '#f97316', 'Stranger');
+        drawPlayer(this.me,  '#7c3aed', '#a78bfa', 'You');
+
+        // HUD — HP hearts
+        ctx.textAlign = 'left';
+        const heart = (filled) => filled ? '❤️' : '🖤';
+        ctx.font = '14px serif';
+        let youHp = '', oppHp = '';
+        for (let i = 0; i < this.MAX_HP; i++) youHp += (i < this.me.hp  ? '❤' : '·');
+        for (let i = 0; i < this.MAX_HP; i++) oppHp += (i < this.opp.hp ? '❤' : '·');
+
+        // You HP bar (left)
+        ctx.fillStyle = '#7c3aed'; ctx.font = 'bold 11px Segoe UI';
+        ctx.fillText('YOU', 10, 20);
+        for (let i = 0; i < this.MAX_HP; i++) {
+          ctx.fillStyle = i < this.me.hp ? '#a78bfa' : '#333';
+          ctx.fillRect(10 + i*18, 24, 14, 8);
+        }
+
+        // Opponent HP bar (right)
+        ctx.fillStyle = '#ea580c'; ctx.textAlign = 'right';
+        ctx.fillText('STRANGER', W-10, 20);
+        for (let i = 0; i < this.MAX_HP; i++) {
+          ctx.fillStyle = i < this.opp.hp ? '#f97316' : '#333';
+          ctx.fillRect(W - 10 - (this.MAX_HP - i)*18, 24, 14, 8);
+        }
+        ctx.textAlign = 'left';
+
+        // Game over overlay
+        if (this.gameOver) {
+          ctx.fillStyle = 'rgba(0,0,0,0.65)'; ctx.fillRect(0, 0, W, H);
+          const won = this.gameOverMsg.includes('WON');
+          ctx.fillStyle = won ? '#22c55e' : '#ef4444';
+          ctx.font = 'bold 36px Segoe UI'; ctx.textAlign = 'center';
+          ctx.fillText(this.gameOverMsg, W/2, H/2 - 16);
+          ctx.fillStyle = '#888'; ctx.font = '15px Segoe UI';
+          ctx.fillText('Closing in 3s…', W/2, H/2 + 18);
+          ctx.textAlign = 'left';
+        }
+      },
+
+      stop() {
+        this.active = false;
+        this.unbindEvents();
+        if (this.animId) cancelAnimationFrame(this.animId);
+        document.getElementById('fps-overlay').style.display = 'none';
+      },
+
+      onGameOver(won) {
+        this.gameOver = true;
+        this.gameOverMsg = won ? 'YOU WON! 🏆' : 'YOU LOST! 💀';
+        addMessage(won ? '🏆 You won the FPS Duel!' : '💀 You lost the FPS Duel!', 'system');
+        setTimeout(() => this.stop(), 3000);
+      },
+
+      onHPUpdate(you, opp) { this.me.hp = you; this.opp.hp = opp; },
+      onOppMove(d) { this.opp.x = d.x; this.opp.y = d.y; this.opp.angle = d.angle; },
+      onOppShoot(d) { this.oppBullets.push({ x: d.x, y: d.y, vx: d.vx, vy: d.vy, life: 2.5 }); },
+    };
+
+    function startFPSDuel() {
+      if (!connected) return;
+      hideGame(); hideStory();
+      socket.emit('fps_start');
+    }
+
+    socket.on('fps_game_start', ({ side }) => {
+      FPS.init(side);
+      addMessage('🔫 FPS Duel started! WASD to move, mouse to aim, click to shoot!', 'system');
+    });
+    socket.on('fps_opponent_move',  (d) => FPS.onOppMove(d));
+    socket.on('fps_opponent_shoot', (d) => FPS.onOppShoot(d));
+    socket.on('fps_hp_update',  ({ you, opponent }) => FPS.onHPUpdate(you, opponent));
+    socket.on('fps_game_over',  ({ won }) => FPS.onGameOver(won));
 
     document.getElementById("next-btn").addEventListener("click", () => {
       scoreMatch = 0;

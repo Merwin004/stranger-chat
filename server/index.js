@@ -18,6 +18,7 @@ const waitingQueue = [];
 const pairs = {};
 const gameState = {};
 const storyState = {}; // roomKey -> { sentences: [], currentTurn: socketId }
+const fpsState = {};  // roomKey -> { hp: { [id]: number } }
 
 const questions = [
   { a: "Pizza", b: "Tacos" },
@@ -80,6 +81,7 @@ io.on("connection", (socket) => {
       const oldKey = [socket.id, oldPartnerId].sort().join("_");
       delete gameState[oldKey];
       delete storyState[oldKey];
+      delete fpsState[oldKey];
       delete pairs[oldPartnerId];
       delete pairs[socket.id];
     }
@@ -172,6 +174,43 @@ io.on("connection", (socket) => {
     });
   });
 
+  // FPS Duel
+  socket.on("fps_start", () => {
+    const partnerId = pairs[socket.id];
+    if (!partnerId) return;
+    const roomKey = [socket.id, partnerId].sort().join("_");
+    fpsState[roomKey] = { hp: { [socket.id]: 3, [partnerId]: 3 } };
+    socket.emit("fps_game_start", { side: "left" });
+    io.to(partnerId).emit("fps_game_start", { side: "right" });
+  });
+
+  socket.on("fps_move", (data) => {
+    const partnerId = pairs[socket.id];
+    if (partnerId) io.to(partnerId).emit("fps_opponent_move", data);
+  });
+
+  socket.on("fps_shoot", (data) => {
+    const partnerId = pairs[socket.id];
+    if (partnerId) io.to(partnerId).emit("fps_opponent_shoot", data);
+  });
+
+  socket.on("fps_hit", () => {
+    const partnerId = pairs[socket.id];
+    if (!partnerId) return;
+    const roomKey = [socket.id, partnerId].sort().join("_");
+    if (!fpsState[roomKey]) return;
+    fpsState[roomKey].hp[socket.id] = Math.max(0, fpsState[roomKey].hp[socket.id] - 1);
+    const myHp = fpsState[roomKey].hp[socket.id];
+    const partnerHp = fpsState[roomKey].hp[partnerId];
+    socket.emit("fps_hp_update", { you: myHp, opponent: partnerHp });
+    io.to(partnerId).emit("fps_hp_update", { you: partnerHp, opponent: myHp });
+    if (myHp <= 0) {
+      socket.emit("fps_game_over", { won: false });
+      io.to(partnerId).emit("fps_game_over", { won: true });
+      delete fpsState[roomKey];
+    }
+  });
+
   socket.on("disconnect", () => {
     console.log(`Disconnected: ${socket.id}`);
     const qIdx = waitingQueue.indexOf(socket.id);
@@ -184,6 +223,7 @@ io.on("connection", (socket) => {
       const roomKey = [socket.id, partnerId].sort().join("_");
       delete gameState[roomKey];
       delete storyState[roomKey];
+      delete fpsState[roomKey];
       delete pairs[partnerId];
     }
     delete pairs[socket.id];
