@@ -17,6 +17,7 @@ const io = new Server(server, {
 const waitingQueue = [];
 const pairs = {};
 const gameState = {};
+const storyState = {}; // roomKey -> { sentences: [], currentTurn: socketId }
 
 const questions = [
   { a: "Pizza", b: "Tacos" },
@@ -75,9 +76,10 @@ io.on("connection", (socket) => {
     if (oldPartnerId) {
       const oldPartner = io.sockets.sockets.get(oldPartnerId);
       if (oldPartner) oldPartner.emit("partner_left");
-      // clean up game state
+      // clean up game/story state
       const oldKey = [socket.id, oldPartnerId].sort().join("_");
       delete gameState[oldKey];
+      delete storyState[oldKey];
       delete pairs[oldPartnerId];
       delete pairs[socket.id];
     }
@@ -134,6 +136,42 @@ io.on("connection", (socket) => {
     }
   });
 
+  // Collaborative Story
+  socket.on("story_start", () => {
+    const partnerId = pairs[socket.id];
+    if (!partnerId) return;
+
+    const roomKey = [socket.id, partnerId].sort().join("_");
+    storyState[roomKey] = { sentences: [], currentTurn: socket.id };
+
+    socket.emit("story_started", { yourTurn: true, sentences: [] });
+    io.to(partnerId).emit("story_started", { yourTurn: false, sentences: [] });
+  });
+
+  socket.on("story_add", ({ sentence }) => {
+    const partnerId = pairs[socket.id];
+    if (!partnerId) return;
+
+    const roomKey = [socket.id, partnerId].sort().join("_");
+    const story = storyState[roomKey];
+    if (!story || story.currentTurn !== socket.id) return;
+
+    const trimmed = sentence.trim();
+    if (!trimmed) return;
+
+    story.sentences.push({ text: trimmed, author: "you" });
+    story.currentTurn = partnerId;
+
+    socket.emit("story_updated", { sentences: story.sentences, yourTurn: false });
+    io.to(partnerId).emit("story_updated", {
+      sentences: story.sentences.map((s) => ({
+        ...s,
+        author: s.author === "you" ? "stranger" : "you",
+      })),
+      yourTurn: true,
+    });
+  });
+
   socket.on("disconnect", () => {
     console.log(`Disconnected: ${socket.id}`);
     const qIdx = waitingQueue.indexOf(socket.id);
@@ -145,6 +183,7 @@ io.on("connection", (socket) => {
       if (partner) partner.emit("partner_left");
       const roomKey = [socket.id, partnerId].sort().join("_");
       delete gameState[roomKey];
+      delete storyState[roomKey];
       delete pairs[partnerId];
     }
     delete pairs[socket.id];

@@ -213,6 +213,87 @@
       white-space: nowrap;
     }
 
+    #story-btn {
+      background: #1e293b;
+      color: #34d399;
+      border: 1px solid #34d39944;
+      white-space: nowrap;
+    }
+
+    /* Story panel */
+    #story-panel {
+      display: none;
+      flex-direction: column;
+      gap: 10px;
+      background: #16213e;
+      border-radius: 12px;
+      padding: 16px;
+      border: 1px solid #2d2d44;
+    }
+
+    #story-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.85rem;
+      color: #34d399;
+      font-weight: 600;
+    }
+
+    #story-turn {
+      font-size: 0.78rem;
+      padding: 3px 10px;
+      border-radius: 20px;
+      background: #0f0f1a;
+    }
+
+    #story-turn.your-turn { color: #34d399; border: 1px solid #34d39944; }
+    #story-turn.their-turn { color: #888; border: 1px solid #33333344; }
+
+    #story-text {
+      min-height: 80px;
+      max-height: 150px;
+      overflow-y: auto;
+      font-size: 0.9rem;
+      line-height: 1.7;
+      color: #e0e0e0;
+      padding: 4px 2px;
+    }
+
+    #story-text::-webkit-scrollbar { width: 3px; }
+    #story-text::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+
+    .story-you { color: #a78bfa; }
+    .story-stranger { color: #34d399; }
+
+    #story-input-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    #story-input {
+      flex: 1;
+      padding: 9px 12px;
+      border-radius: 10px;
+      border: 1px solid #333;
+      background: #0f0f1a;
+      color: #e0e0e0;
+      font-size: 0.88rem;
+      outline: none;
+    }
+
+    #story-input:focus { border-color: #34d399; }
+    #story-input:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    #story-send-btn {
+      background: #34d399;
+      color: #0f0f1a;
+      padding: 9px 14px;
+      font-size: 0.85rem;
+    }
+
+    #story-send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
     #start-btn {
       width: 100%;
       padding: 12px;
@@ -233,6 +314,19 @@
     <div id="status">Press "Start" to find a stranger</div>
     <div id="messages"></div>
 
+    <!-- Collaborative Story panel -->
+    <div id="story-panel">
+      <div id="story-header">
+        📖 Collaborative Story
+        <span id="story-turn" class="their-turn">Waiting...</span>
+      </div>
+      <div id="story-text"><span style="color:#555;font-style:italic;">The story will appear here...</span></div>
+      <div id="story-input-row">
+        <input id="story-input" type="text" placeholder="Add the next sentence..." maxlength="200" disabled />
+        <button id="story-send-btn" disabled onclick="storySend()">Add</button>
+      </div>
+    </div>
+
     <!-- This or That game panel -->
     <div id="game-panel">
       <div id="game-question">Loading question...</div>
@@ -248,6 +342,7 @@
       <input id="msg-input" type="text" placeholder="Type a message..." maxlength="500" />
       <button id="send-btn">Send</button>
       <button id="game-btn" onclick="startGame()">🎮 This or That</button>
+      <button id="story-btn" onclick="startStory()">📖 Story</button>
       <button id="next-btn">Next</button>
     </div>
     <button id="start-btn">Start Chatting</button>
@@ -288,9 +383,16 @@
 
     function setStatus(text) { statusEl.textContent = text; }
 
+    const storyPanel = document.getElementById("story-panel");
+    const storyText = document.getElementById("story-text");
+    const storyInput = document.getElementById("story-input");
+    const storySendBtn = document.getElementById("story-send-btn");
+    const storyTurn = document.getElementById("story-turn");
+
     function findPartner() {
       messagesEl.innerHTML = "";
       hideGame();
+      hideStory();
       socket.emit("find_partner");
       setStatus("Looking for a stranger...");
       inputRow.style.display = "none";
@@ -308,9 +410,70 @@
       choiceB.className = "choice-btn";
     }
 
+    function hideStory() {
+      storyPanel.style.display = "none";
+      storyText.innerHTML = "<span style='color:#555;font-style:italic;'>The story will appear here...</span>";
+      storyInput.value = "";
+      storyInput.disabled = true;
+      storySendBtn.disabled = true;
+      storyTurn.textContent = "Waiting...";
+      storyTurn.className = "their-turn";
+    }
+
+    function renderStory(sentences) {
+      if (!sentences.length) {
+        storyText.innerHTML = "<span style='color:#555;font-style:italic;'>The story will appear here...</span>";
+        return;
+      }
+      storyText.innerHTML = sentences.map((s) =>
+        `<span class="story-${s.author}">${s.text}</span>`
+      ).join(" ");
+      storyText.scrollTop = storyText.scrollHeight;
+    }
+
+    function setStoryTurn(isYours) {
+      storyInput.disabled = !isYours;
+      storySendBtn.disabled = !isYours;
+      storyTurn.textContent = isYours ? "Your turn ✏️" : "Stranger's turn...";
+      storyTurn.className = isYours ? "your-turn" : "their-turn";
+      if (isYours) storyInput.focus();
+    }
+
+    function startStory() {
+      if (!connected) return;
+      hideGame();
+      socket.emit("story_start");
+    }
+
+    function storySend() {
+      const text = storyInput.value.trim();
+      if (!text) return;
+      storyInput.value = "";
+      socket.emit("story_add", { sentence: text });
+      setStoryTurn(false);
+    }
+
+    document.getElementById("story-input").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") storySend();
+    });
+
+    socket.on("story_started", ({ yourTurn, sentences }) => {
+      hideGame();
+      storyPanel.style.display = "flex";
+      renderStory(sentences);
+      setStoryTurn(yourTurn);
+      addMessage("📖 Collaborative story started! " + (yourTurn ? "You go first." : "Stranger goes first."), "system");
+    });
+
+    socket.on("story_updated", ({ sentences, yourTurn }) => {
+      renderStory(sentences);
+      setStoryTurn(yourTurn);
+    });
+
     function startGame() {
       if (!connected) return;
       hideGame();
+      hideStory();
       socket.emit("this_or_that_start");
     }
 
@@ -347,6 +510,7 @@
     socket.on("partner_left", () => {
       connected = false;
       hideGame();
+      hideStory();
       setStatus("Stranger disconnected. Click Next to find another.");
       addMessage("Stranger has disconnected.", "system");
     });
